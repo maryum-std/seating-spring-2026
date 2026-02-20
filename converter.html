@@ -2,15 +2,15 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>PDF to JSON Converter (V3.0)</title>
+    <title>PDF to JSON Converter (V3.2) – Sorted by Exam Date</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
     <style>
         :root { --primary: #2563eb; }
-        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #f4f4f9; }
+        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #f4f4f9; margin: 0; }
         .box { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); text-align: center; width: 400px; }
         h2 { color: var(--primary); margin-bottom: 10px; }
         p { color: #666; margin-bottom: 20px; font-size: 0.9rem; }
-        input { margin-bottom: 20px; padding: 10px; border: 1px solid #ccc; border-radius: 6px; }
+        input { margin-bottom: 20px; padding: 10px; border: 1px solid #ccc; border-radius: 6px; width: 80%; }
         .bar-bg { width: 100%; height: 10px; background: #eee; border-radius: 5px; overflow: hidden; display: none; margin-top: 20px;}
         .bar-fill { height: 100%; width: 0%; background: var(--primary); transition: width 0.2s; }
         #status { margin-top: 15px; font-size: 0.9rem; color: #444; font-weight: bold; }
@@ -19,8 +19,8 @@
 <body>
 
 <div class="box">
-    <h2>🛠️ Create data.json (V3.1)</h2>
-    <p>Select your Seating Plan PDF. Now extracts date and day for each exam!</p>
+    <h2>🗓️ Sorted data.json (V3.2)</h2>
+    <p>Exams are automatically sorted by date (earliest first).</p>
 
     <input type="file" id="fileInput" accept="application/pdf" />
     
@@ -42,7 +42,37 @@
     const NAME_SKIP_WORDS = new Set(['EXAMINATION', 'DEPARTMENT', 'UNIVERSITY', 'ENGINEERING', 'TECHNOLOGY', 'PHOTO', 'PAGE', 'OF', 'ID']);
     const SUBJECT_CODE_PATTERN = /^[A-Z]{2,}\d{3,4}$/i;
     const DATE_PATTERN = /^\d{1,2}[-\/](Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[-\/]\d{2,4}$/i;
-    
+
+    const MONTH_MAP = {
+        'jan':0, 'feb':1, 'mar':2, 'apr':3, 'may':4, 'jun':5,
+        'jul':6, 'aug':7, 'sep':8, 'oct':9, 'nov':10, 'dec':11
+    };
+
+    // ---------- ROBUST date parser: returns a timestamp number for sorting ----------
+    function parseExamDate(dateStr) {
+        // Dates with no value go to the very END
+        if (!dateStr || dateStr === 'Date N/A') return Number.MAX_SAFE_INTEGER;
+
+        try {
+            // Normalize: replace "/" with "-", trim spaces
+            const normalized = dateStr.replace(/\//g, '-').trim();
+            const parts = normalized.split('-');
+            if (parts.length !== 3) return Number.MAX_SAFE_INTEGER;
+
+            const day   = parseInt(parts[0], 10);
+            const month = MONTH_MAP[parts[1].toLowerCase()];   // case-insensitive month
+            const yr    = parts[2];
+            const year  = yr.length === 2 ? 2000 + parseInt(yr, 10) : parseInt(yr, 10);
+
+            if (isNaN(day) || month === undefined || isNaN(year)) return Number.MAX_SAFE_INTEGER;
+
+            // Return a plain numeric timestamp — no timezone weirdness
+            return new Date(year, month, day).getTime();
+        } catch (e) {
+            return Number.MAX_SAFE_INTEGER;
+        }
+    }
+
     fileInput.addEventListener('change', async function(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -70,7 +100,6 @@
                     .map(item => item.str.trim())
                     .filter(str => str.length > 0); 
                 
-                
                 for (let j = 0; j < items.length; j++) {
                     const item = items[j];
                     
@@ -95,15 +124,14 @@
                             const currentItem = items[l];
                             
                             if (currentItem.includes(',') && SUBJECT_CODE_PATTERN.test(currentItem.split(',')[0])) {
-                                
                                 const parts = currentItem.split(',');
                                 const rowStartIndex = l;
                                 
-                                const subjectCode = parts[0].trim();                                
-                                const subjectSection = parts[1].trim();                                                            
+                                const subjectCode    = parts[0].trim();
+                                const subjectSection = parts[1].trim();
                                 const subjectCourseName = items[rowStartIndex + 1] || 'Course N/A';
                                 
-                                // DATE EXTRACTION - Look for date pattern in the next few items
+                                // DATE EXTRACTION
                                 let subjectDate = 'Date N/A';
                                 for (let d = rowStartIndex + 2; d < rowStartIndex + 6 && d < items.length; d++) {
                                     if (DATE_PATTERN.test(items[d])) {
@@ -112,34 +140,24 @@
                                     }
                                 }
                                 
-                                // DAY CALCULATION - Calculate day of week from date
+                                // DAY CALCULATION
                                 let subjectDay = 'Day N/A';
                                 if (subjectDate !== 'Date N/A') {
                                     try {
-                                        // Parse date like "29-Dec-25"
-                                        const dateParts = subjectDate.split('-');
-                                        const day = parseInt(dateParts[0]);
-                                        const month = dateParts[1];
-                                        const year = parseInt('20' + dateParts[2]); // Assume 20xx
-                                        
-                                        const monthMap = {
-                                            'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
-                                            'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
-                                        };
-                                        
-                                        const dateObj = new Date(year, monthMap[month], day);
-                                        const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-                                        subjectDay = days[dateObj.getDay()];
+                                        const ts = parseExamDate(subjectDate);
+                                        if (ts !== Number.MAX_SAFE_INTEGER) {
+                                            const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                                            subjectDay = days[new Date(ts).getDay()];
+                                        }
                                     } catch (e) {
                                         subjectDay = 'Day N/A';
                                     }
                                 }
                                 
-                                const subjectTime = items[rowStartIndex + 3] || 'Time N/A';                                        
-                                const subjectTeacher = items[rowStartIndex + 4] || 'Teacher N/A';                                
-                                
-                                const seatItem = items[rowStartIndex + 5];
-                                const subjectRoom = (seatItem && seatItem.trim().length > 0) ? seatItem.trim() : 'Room N/A';
+                                const subjectTime    = items[rowStartIndex + 3] || 'Time N/A';
+                                const subjectTeacher = items[rowStartIndex + 4] || 'Teacher N/A';
+                                const seatItem       = items[rowStartIndex + 5];
+                                const subjectRoom    = (seatItem && seatItem.trim().length > 0) ? seatItem.trim() : 'Room N/A';
                                 
                                 studentSubjects.push({
                                     code: subjectCode,
@@ -166,28 +184,40 @@
                                 name: finalName,
                                 room: sub.room,
                                 section: sub.section,
-                                subject: sub.code,       
+                                subject: sub.code,
                                 courseName: sub.courseName,
                                 date: sub.date,
                                 day: sub.day,
-                                teacher: sub.teacher,   
-                                time: sub.time
+                                teacher: sub.teacher,
+                                time: sub.time,
+                                // hidden numeric key used for sorting — won't appear in JSON output
+                                _sortKey: parseExamDate(sub.date)
                             });
                         });
                     }
                 }
             }
 
-            status.innerText = `✅ Done! Found ${allStudents.length} exam slots. Downloading...`;
-            downloadJSON(allStudents);
+            // ---- SORT: earliest date first, N/A dates last ----
+            status.innerText = `Sorting ${allStudents.length} entries by exam date...`;
+            await new Promise(r => setTimeout(r, 10));
+
+            allStudents.sort((a, b) => a._sortKey - b._sortKey);
+
+            // Remove the hidden sort key before saving
+            const cleanStudents = allStudents.map(({ _sortKey, ...rest }) => rest);
+
+            status.innerText = `✅ Done! Sorted ${cleanStudents.length} exam slots. Downloading...`;
+            downloadJSON(cleanStudents);
+
         } catch (err) {
             console.error("PDF Parsing Error:", err);
-            status.innerText = "❌ Error parsing PDF. Check console for details. (Likely an unexpected page format.)";
+            status.innerText = "❌ Error parsing PDF. Check console for details.";
         }
     });
 
     function downloadJSON(data) {
-        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data, null, 2)); 
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data, null, 2));
         const downloadAnchor = document.createElement('a');
         downloadAnchor.setAttribute("href", dataStr);
         downloadAnchor.setAttribute("download", "data.json");
