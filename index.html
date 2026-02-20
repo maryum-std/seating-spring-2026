@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exam Seating Plan</title>
+    <style>
+    :root { --primary: #2563eb; --bg: #f8fafc; --card: #ffffff; }
+    body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; padding: 20px; color: #1e293b; }
+    .container { max-width: 650px; margin: 0 auto; } 
+    
+    .header { text-align: center; margin-bottom: 30px; }
+    .header h1 { margin: 0; color: var(--primary); font-size: 2rem; }
+    .header .subtitle { color: #64748b; font-weight: 600; margin-top: 5px; font-size: 1.1rem; }
+    
+    .description { 
+        font-size: 0.95rem; color: #475569; line-height: 1.5; 
+        margin-top: 15px; max-width: 90%; margin-left: auto; margin-right: auto;
+    }
+
+    .input-group { position: relative; margin-top: 25px; }
+    input { width: 100%; padding: 16px; border: 2px solid #e2e8f0; border-radius: 12px; font-size: 16px; outline: none; box-shadow: 0 4px 6px rgba(0,0,0,0.05); transition: 0.2s; box-sizing: border-box; }
+    input:focus { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1); }
+    
+    #results { 
+        margin-top: 20px; 
+    } 
+    .card { background: var(--card); padding: 20px; margin-bottom: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border-left: 5px solid var(--primary); animation: fadeIn 0.3s ease-out; position: relative; }
+    
+    .card h3 { margin: 0 0 5px 0; color: #1e293b; font-size: 1.4rem; font-weight: 700; }
+    .student-id { font-weight: bold; color: #94a3b8; display: block; margin-bottom: 10px; font-family: monospace; font-size: 1.1rem; }
+    
+    .time-badge { 
+        background: #fffbeb; color: #b45309; 
+        padding: 8px 14px; border-radius: 8px; 
+        font-size: 0.9rem; font-weight: bold; 
+        display: inline-block; 
+        margin-bottom: 15px; border: 1px solid #fcd34d;
+    }
+    
+    .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 0.9rem; border-top: 1px solid #f1f5f9; padding-top: 12px; }
+    .label { font-size: 0.7rem; text-transform: uppercase; color: #94a3b8; font-weight: bold; margin-bottom: 2px; }
+    .val { font-weight: 600; color: #475569; word-break: break-word; } 
+    .room-tag { background: #eff6ff; color: #1d4ed8; padding: 2px 8px; border-radius: 4px; display: inline-block; }
+    
+    .no-result { text-align: center; color: #dc2626; display: none; margin-top: 30px; font-weight: bold; }
+    
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>Exam Seating</h1>
+        <p class="subtitle">Final exam· Fall 2025</p>
+        
+        <p class="description">
+            Enter your Roll Number or Name below to instantly find your 
+            Room, Time Slot, and Teacher. No need to scroll through the PDF!
+        </p>
+    </div>
+
+    <div class="input-group">
+        <input type="text" id="searchInput" placeholder="Loading data..." disabled autocomplete="off">
+    </div>
+    
+    <div id="results"></div>
+    <div id="noResult" class="no-result">No student found</div>
+</div>
+
+<script>
+    let students = [];
+    const searchInput = document.getElementById('searchInput');
+    const resultsDiv = document.getElementById('results');
+    const noResultDiv = document.getElementById('noResult');
+
+    // 1. Load Data
+    fetch('data.json')
+        .then(response => response.json())
+        .then(data => {
+            students = data;
+            searchInput.placeholder = "🔍 Name or Roll No (e.g. 24K0831)";
+            searchInput.disabled = false;
+            searchInput.focus();
+        })
+        .catch(err => {
+            alert("Error: Could not find data.json! Please ensure the file is present and correct.");
+        });
+
+    // 2. Search Logic
+    searchInput.addEventListener('input', (e) => {
+        const rawInput = e.target.value.toUpperCase().trim();
+        const cleanInput = rawInput.replace(/[^A-Z0-9]/g, ''); 
+
+        resultsDiv.innerHTML = "";
+        noResultDiv.style.display = "none";
+
+        if (rawInput.length < 2) return;
+
+        // Find ALL subjects matching the input roll/name
+        const matches = students.filter(s => {
+            const name = s.name || '';
+            const nameMatch = name.toUpperCase().includes(rawInput);
+            const sRollClean = s.roll ? s.roll.replace(/[^A-Z0-9]/g, '') : '';
+            const rollMatch = sRollClean.includes(cleanInput);
+            return nameMatch || rollMatch;
+        });
+
+        if (matches.length === 0) {
+            noResultDiv.style.display = "block";
+        } else {
+            // Sort to display subjects in a logical order (by time)
+            matches.sort((a, b) => a.time.localeCompare(b.time));
+            
+            matches.slice(0, 50).forEach(s => {
+                let niceTime = s.time ? s.time.replace(/,/g, ', ') : 'Time N/A';
+                
+                // Format the exam date for this specific exam
+                let examDate = 'Date N/A';
+                if (s.date) {
+                    examDate = s.date;
+                }
+                
+                // CRITICAL: Get student name and course name
+                const studentName = (s.name && s.name !== 'Unknown') ? s.name : 'N/A';
+                const cardHeading = s.courseName || 'Subject Detail N/A'; 
+
+                const div = document.createElement('div');
+                div.className = 'card';
+                div.innerHTML = `
+                    <div class="time-badge">
+                        🗓️ ${examDate} | ⏰ ${niceTime}
+                    </div>
+                    <h3>${cardHeading}</h3>
+                    <span class="student-id">🆔 ${s.roll || 'N/A'}</span>
+                    <div class="details-grid">
+                        <div><div class="label">Room / Seat</div><div class="val room-tag">${s.room || 'N/A'}</div></div>
+                        <div><div class="label">Section</div><div class="val">${s.section || 'N/A'}</div></div>
+                        
+                        <div><div class="label">Student Name</div><div class="val">${studentName}</div></div>
+                        
+                        <div><div class="label">Subject Code</div><div class="val">${s.subject || 'Code N/A'}</div></div> 
+                        
+                        <div><div class="label">Teacher</div><div class="val">${s.teacher || 'N/A'}</div></div>
+                        
+                    </div>
+                `;
+                resultsDiv.appendChild(div);
+            });
+        }
+    });
+</script>
+
+</body>
+</html>
