@@ -53,7 +53,7 @@
 <div class="container">
     <div class="header">
         <h1>Exam Seating</h1>
-        <p class="subtitle">Final exam· Fall 2025</p>
+        <p class="subtitle">Mid exam· Spring 2026</p>
         
         <p class="description">
             Enter your Roll Number or Name below to instantly find your 
@@ -110,8 +110,19 @@
         if (matches.length === 0) {
             noResultDiv.style.display = "block";
         } else {
-            // Sort to display subjects in a logical order (by time)
-            matches.sort((a, b) => a.time.localeCompare(b.time));
+           matches.sort((a, b) => {
+    const MONTH_MAP = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+    function toTs(dateStr) {
+        if (!dateStr || dateStr === 'Date N/A') return Number.MAX_SAFE_INTEGER;
+        const parts = dateStr.replace(/\//g, '-').split('-');
+        if (parts.length !== 3) return Number.MAX_SAFE_INTEGER;
+        const day = parseInt(parts[0]), month = MONTH_MAP[parts[1].toLowerCase()], yr = parts[2];
+        const year = yr.length === 2 ? 2000 + parseInt(yr) : parseInt(yr);
+        return new Date(year, month, day).getTime();
+    }
+    const dateDiff = toTs(a.date) - toTs(b.date);
+    return dateDiff !== 0 ? dateDiff : a.time.localeCompare(b.time); // tie-break by time
+});
             
             matches.slice(0, 50).forEach(s => {
                 let niceTime = s.time ? s.time.replace(/,/g, ', ') : 'Time N/A';
