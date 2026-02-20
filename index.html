@@ -120,8 +120,15 @@
         const year = yr.length === 2 ? 2000 + parseInt(yr) : parseInt(yr);
         return new Date(year, month, day).getTime();
     }
+    function timeToMins(timeStr) {
+        if (!timeStr || timeStr === 'Time N/A') return Number.MAX_SAFE_INTEGER;
+        // handles "8:30", "11:00", "8:30 AM - 10:00 AM", etc.
+        const match = timeStr.match(/(\d{1,2}):(\d{2})/);
+        if (!match) return Number.MAX_SAFE_INTEGER;
+        return parseInt(match[1]) * 60 + parseInt(match[2]);
+    }
     const dateDiff = toTs(a.date) - toTs(b.date);
-    return dateDiff !== 0 ? dateDiff : a.time.localeCompare(b.time); // tie-break by time
+    return dateDiff !== 0 ? dateDiff : timeToMins(a.time) - timeToMins(b.time);
 });
             
             matches.slice(0, 50).forEach(s => {
@@ -165,3 +172,4 @@
 
 </body>
 </html>
+
